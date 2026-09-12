@@ -21,6 +21,10 @@ const TMDB_TOKEN = process.env.TMDB_TOKEN || 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiIxZ
 const cache = new Map();
 const CACHE_TTL = 30 * 60 * 1000;
 
+// Server-side cookie store keyed by a short session id
+const cookieStore = new Map();
+const COOKIE_TTL = 30 * 60 * 1000;
+
 // ------------------------------------------------------------------
 // TMDB ID → IMDB ID
 // ------------------------------------------------------------------
@@ -63,7 +67,6 @@ function extractLangFromUrl(url) {
 
 // ------------------------------------------------------------------
 // Derive the correct CDN referer from a proxied stream URL
-// (modiplay-style proxy.php?url=...&ebd=...&ref=...)
 // ------------------------------------------------------------------
 function deriveReferer(streamUrl, fallback) {
   try {
@@ -77,6 +80,19 @@ function deriveReferer(streamUrl, fallback) {
 }
 
 // ------------------------------------------------------------------
+// Filter cookies by target host (matches exact + parent domains)
+// ------------------------------------------------------------------
+function cookiesForHost(cookiesArr, host) {
+  if (!cookiesArr || !cookiesArr.length || !host) return '';
+  const matched = cookiesArr.filter((c) => {
+    const d = (c.domain || '').replace(/^\./, '');
+    if (!d) return false;
+    return host === d || host.endsWith('.' + d);
+  });
+  return matched.map((c) => `${c.name}=${c.value}`).join('; ');
+}
+
+// ------------------------------------------------------------------
 // POST /api/extract
 // ------------------------------------------------------------------
 app.post('/api/extract', async (req, res) => {
@@ -87,7 +103,6 @@ app.post('/api/extract', async (req, res) => {
   console.log('[extract] TMDB ID:', tmdbId, '| type:', type);
   console.log('======================================================');
 
-  // Cache hit
   const key = `${type}-${tmdbId}-${season}-${episode}`;
   const hit = cache.get(key);
   if (hit && Date.now() - hit.ts < CACHE_TTL) {
@@ -116,9 +131,7 @@ app.post('/api/extract', async (req, res) => {
         '--disable-dev-shm-usage',
         '--disable-blink-features=AutomationControlled',
         '--window-size=1280,720',
-       '--disable-gpu',          // New: Disables GPU hardware acceleration
-       '--single-process',       // New: Runs Chrome in a single process
-       '--no-zygote',
+        '--disable-gpu',
       ],
       defaultViewport: { width: 1280, height: 720 },
     });
@@ -148,7 +161,6 @@ app.post('/api/extract', async (req, res) => {
         }
       }
 
-      // Subtitle interception
       if (
         (url.includes('.vtt') || url.includes('.srt') || url.includes('subtitle')) &&
         !subtitleUrls.includes(url)
@@ -159,13 +171,8 @@ app.post('/api/extract', async (req, res) => {
 
       if (!streamUrl && (url.includes('.m3u8') || url.includes('playlist'))) {
         streamUrl = url;
-
-        // ── Derive the real CDN referer from ebd=/ref= params ────
-        // If the URL is a proxy.php-style wrapper (modiplay etc.),
-        // it embeds the true origin the CDN expects in `ebd` / `ref`.
         const headers = request.headers();
         referer = deriveReferer(url, headers.referer || referer);
-
         console.log('[extract] 🎯 FOUND STREAM:', url);
         console.log('[extract] 🎯 REFERER:', referer);
       }
@@ -210,6 +217,18 @@ app.post('/api/extract', async (req, res) => {
       }
     }
 
+    // ── Grab ALL cookies the browser session collected ─────────
+    let allCookies = [];
+    try {
+      const cdp = await page.target().createCDPSession();
+      const result = await cdp.send('Network.getAllCookies');
+      allCookies = result.cookies || [];
+      await cdp.detach();
+      console.log('[extract] 🍪 Captured cookies:', allCookies.length);
+    } catch (e) {
+      console.log('[extract] ⚠️ Cookie capture failed:', e.message);
+    }
+
     await browser.close();
 
     if (!streamUrl) {
@@ -225,10 +244,19 @@ app.post('/api/extract', async (req, res) => {
       referer,
     }));
 
+    // ── Store cookies server-side under a short id ────────────
+    const ckId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    cookieStore.set(ckId, { cookies: allCookies, ts: Date.now() });
+    // Cleanup expired
+    for (const [k, v] of cookieStore) {
+      if (Date.now() - v.ts > COOKIE_TTL) cookieStore.delete(k);
+    }
+
     const payload = {
       stream: streamUrl,
       referer,
       subtitles,
+      cookies: ckId,
       mode: 'extract',
     };
 
@@ -287,22 +315,46 @@ async function tryClickPlayer(page) {
 app.get('/api/proxy', async (req, res) => {
   const target = req.query.url;
   const referer = req.query.referer || `https://${VIDSRC_HOST}/`;
+  const ckId = req.query.ck || '';
   if (!target) return res.status(400).send('url query param required');
 
-  // Send Referer + UA + Accept always.
-  // Only send Origin when the referer's origin matches the target's origin —
-  // sending a mismatched Origin makes many CDNs return 403.
+  let tgtHost = '';
+  try { tgtHost = new URL(target).host; } catch (_) {}
+
+  // ── Referer selection ───────────────────────────────────────
+  // For URLs on the source host (modiplay etc.), use the source root.
+  // For everything else (CDNs), use the derived referer.
+  let effectiveReferer = referer;
+  if (tgtHost === VIDSRC_HOST) {
+    effectiveReferer = `https://${VIDSRC_HOST}/`;
+  }
+
+  // ── Build headers ───────────────────────────────────────────
   const headers = {
-    Referer: referer,
+    Referer: effectiveReferer,
     'User-Agent': UA,
     Accept: '*/*',
     'Accept-Language': 'en-US,en;q=0.9',
   };
+
+  // Same-origin Origin only
   try {
-    const refOrigin = new URL(referer).origin;
+    const refOrigin = new URL(effectiveReferer).origin;
     const tgtOrigin = new URL(target).origin;
     if (refOrigin === tgtOrigin) headers.Origin = refOrigin;
   } catch (_) {}
+
+  // ── Attach cookies for the target host ──────────────────────
+  if (ckId) {
+    const entry = cookieStore.get(ckId);
+    if (entry) {
+      const cookieHeader = cookiesForHost(entry.cookies, tgtHost);
+      if (cookieHeader) {
+        headers.Cookie = cookieHeader;
+        console.log(`[proxy] 🍪 Sending ${cookieHeader.length} bytes of cookies to ${tgtHost}`);
+      }
+    }
+  }
 
   try {
     const upstream = await fetch(target, { headers });
@@ -318,12 +370,13 @@ app.get('/api/proxy', async (req, res) => {
     if (isPlaylist) {
       const text = await upstream.text();
       const base = new URL(target);
+      const ckParam = ckId ? `&ck=${encodeURIComponent(ckId)}` : '';
       const rewritten = text.split('\n').map((line) => {
         const trimmed = line.trim();
         if (!trimmed || trimmed.startsWith('#')) return line;
         try {
           const absolute = new URL(trimmed, base).toString();
-          return `/api/proxy?url=${encodeURIComponent(absolute)}&referer=${encodeURIComponent(referer)}`;
+          return `/api/proxy?url=${encodeURIComponent(absolute)}&referer=${encodeURIComponent(referer)}${ckParam}`;
         } catch (_) { return line; }
       }).join('\n');
 
@@ -350,7 +403,7 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log('');
   console.log('======================================================');
-  console.log('  ✅ Server running at http://localhost:3000');
+  console.log(`  ✅ Server running at http://0.0.0.0:${PORT}`);
   console.log('  Host      :', VIDSRC_HOST);
   console.log('  Headless  :', HEADLESS);
   console.log('  TMDB token:', TMDB_TOKEN.startsWith('eyJ') ? 'set ✅' : 'MISSING ❌');
