@@ -119,7 +119,7 @@ app.post('/api/extract', async (req, res) => {
     const embedUrl =
       type === 'tv'
         ? `https://${VIDSRC_HOST}/embed/tv/${imdbId}/${season}/${episode}`
-        : `https://rozgarlelo.modiplay.xyz/embed/tmdb/movie?id=${tmdbId}`;
+        : `https://vidsrc.in/embed/movie/872906`;
 
     console.log('[extract] ▶ Loading:', embedUrl);
 
