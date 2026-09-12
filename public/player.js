@@ -595,10 +595,10 @@ document.addEventListener('DOMContentLoaded', () => {
       if (data.mode === 'iframe') {
         playIframe(data.embed);
       } else {
-        let proxied =
-  `/api/proxy?url=${encodeURIComponent(data.stream)}` +
-  `&referer=${encodeURIComponent(data.referer || '')}`;
-if (data.cookies) proxied += `&ck=${encodeURIComponent(data.cookies)}`;
+        const proxied =
+          `/api/proxy?url=${encodeURIComponent(data.stream)}` +
+          `&referer=${encodeURIComponent(data.referer || '')}`;
+        playHls(proxied, data.subtitles || [], data.referer);
       }
     } catch (err) {
       console.error('[player] error:', err);
