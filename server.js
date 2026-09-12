@@ -1,6 +1,6 @@
 const express = require('express');
 const path = require('path');
-const { HttpsProxyAgent } = require('https-proxy-agent');
+const { SocksProxyAgent } = require('socks-proxy-agent');
 
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
@@ -19,20 +19,20 @@ const VIDSRC_HOST = process.env.VIDSRC_HOST || 'rozgarlelo.modiplay.xyz';
 const TMDB_TOKEN = process.env.TMDB_TOKEN || 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiIxZGYyMzgyY2RmZGFmNDIzYzFlZDAyMjljYzU0YmY2YiIsIm5iZiI6MTc0NTA1MTI4OC4wMDEsInN1YiI6IjY4MDM1ZTk3YjExM2ZmODcyM2Q5Yzk0NSIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.IZCb8jHZ9alKmQ_KU3be_32ug_QztUqw4Y_KDPt1kYk';
 
 // ==================================================================
-// WEBSHARE RESIDENTIAL PROXY CONFIG
+// BYTESFLOWS RESIDENTIAL PROXY CONFIG (SOCKS5)
 // ==================================================================
-const PROXY_HOST = process.env.PROXY_HOST || '31.59.20.176';
-const PROXY_PORT = process.env.PROXY_PORT || '6754';
-const PROXY_USER = process.env.PROXY_USER || 'nhbeoqgw';
-const PROXY_PASS = process.env.PROXY_PASS || 'fcjehe5riyuw';
+const PROXY_STRING = process.env.BYTESFLOWS_PROXY || 'socks5h://u-tTAeBYLv:MkuWR5ZV@p1.bytesflows.com:8001';
+// Expected format:
+//   socks5h://USERNAME:PASSWORD@residential.byteful.com:8000
 
 let proxyAgent = null;
-if (PROXY_HOST && PROXY_USER && PROXY_PASS) {
-  const proxyUrl =
-    `http://${encodeURIComponent(PROXY_USER)}:${encodeURIComponent(PROXY_PASS)}` +
-    `@${PROXY_HOST}:${PROXY_PORT}`;
-  proxyAgent = new HttpsProxyAgent(proxyUrl);
-  console.log('[proxy] 🌐 Residential proxy enabled:', PROXY_HOST + ':' + PROXY_PORT);
+if (PROXY_STRING) {
+  try {
+    proxyAgent = new SocksProxyAgent(PROXY_STRING);
+    console.log('[proxy] 🌐 BytesFlows SOCKS5 proxy enabled');
+  } catch (e) {
+    console.error('[proxy] ❌ Failed to init SOCKS5 agent:', e.message);
+  }
 } else {
   console.log('[proxy] ⚠️  No residential proxy configured — using direct connection');
 }
@@ -330,7 +330,7 @@ async function tryClickPlayer(page) {
 }
 
 // ------------------------------------------------------------------
-// GET /api/proxy  (routes through Webshare when configured)
+// GET /api/proxy  (routes through BytesFlows SOCKS5 when configured)
 // ------------------------------------------------------------------
 app.get('/api/proxy', async (req, res) => {
   const target = req.query.url;
@@ -378,7 +378,6 @@ app.get('/api/proxy', async (req, res) => {
 
   // ── Decide whether to route through the residential proxy ───
   // Rule: use the proxy for anything that is NOT the source host itself.
-  // (Source host = modiplay; it accepts datacenter IPs fine.)
   // Set FORCE_PROXY=true to route EVERYTHING through the proxy.
   const FORCE_PROXY = process.env.FORCE_PROXY === 'true';
   const useProxy = proxyAgent && (FORCE_PROXY || tgtHost !== VIDSRC_HOST);
@@ -440,7 +439,7 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log('  Host      :', VIDSRC_HOST);
   console.log('  Headless  :', HEADLESS);
   console.log('  TMDB token:', TMDB_TOKEN.startsWith('eyJ') ? 'set ✅' : 'MISSING ❌');
-  console.log('  Proxy     :', proxyAgent ? `${PROXY_HOST}:${PROXY_PORT} ✅` : 'not configured');
+  console.log('  Proxy     :', proxyAgent ? 'BytesFlows SOCKS5 ✅' : 'not configured');
   console.log('======================================================');
   console.log('');
 });
