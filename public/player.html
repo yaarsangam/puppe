@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Playing…</title>
+<link rel="stylesheet" href="player.css" />
+<script src="hls.min.js"></script>
+</head>
+<body>
+
+<div class="nf-player" id="nfPlayer">
+  <video id="video" playsinline></video>
+
+  <!-- Loading / status overlay -->
+  <div class="nf-loading" id="nfLoading">
+    <div class="nf-spinner"></div>
+    <p id="statusText">Extracting stream… this may take 15–40 seconds.</p>
+  </div>
+
+  <!-- Controls UI -->
+  <div class="nf-ui" id="nfUI">
+
+    <!-- Top bar -->
+    <div class="nf-top">
+      <button class="nf-btn nf-back" id="nfBack" title="Back">
+        <svg viewBox="0 0 24 24" width="30" height="30">
+          <path fill="currentColor" d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
+        </svg>
+      </button>
+      <div class="nf-title" id="nfTitle">Loading…</div>
+    </div>
+
+    <!-- Center pulse button -->
+    <button class="nf-center-btn" id="nfCenterBtn" title="Play/Pause">
+      <svg viewBox="0 0 24 24" width="72" height="72">
+        <path fill="currentColor" d="M8 5v14l11-7z"/>
+      </svg>
+    </button>
+
+    <!-- Bottom controls -->
+    <div class="nf-bottom">
+
+      <div class="nf-progress-row">
+        <div class="nf-time" id="nfTimeLeft">0:00</div>
+        <div class="nf-progress" id="nfProgress">
+          <div class="nf-progress-buffer" id="nfBuffer"></div>
+          <div class="nf-progress-played" id="nfPlayed"></div>
+          <div class="nf-progress-thumb" id="nfThumb"></div>
+        </div>
+        <div class="nf-time nf-time-right" id="nfTimeRight">-0:00</div>
+      </div>
+
+      <div class="nf-buttons">
+
+        <div class="nf-group-left">
+          <button class="nf-btn" id="nfPlayBtn" title="Play/Pause">
+            <svg viewBox="0 0 24 24" width="30" height="30">
+              <path fill="currentColor" d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+            </svg>
+          </button>
+
+          <button class="nf-btn nf-skip" id="nfBack10" title="Back 10s">
+            <svg viewBox="0 0 24 24" width="30" height="30">
+              <path fill="currentColor" d="M12.5 3a9 9 0 1 0 8.94 10.06h-2.02A7 7 0 1 1 12.5 5v3L17 4.5 12.5 1v2z"/>
+              <text x="12" y="16" text-anchor="middle" font-size="8" fill="currentColor" font-weight="700">10</text>
+            </svg>
+          </button>
+
+          <button class="nf-btn nf-skip" id="nfFwd10" title="Forward 10s">
+            <svg viewBox="0 0 24 24" width="30" height="30">
+              <path fill="currentColor" d="M11.5 3a9 9 0 1 1-8.94 10.06h2.02A7 7 0 1 0 11.5 5v3L7 4.5 11.5 1v2z"/>
+              <text x="12" y="16" text-anchor="middle" font-size="8" fill="currentColor" font-weight="700">10</text>
+            </svg>
+          </button>
+
+          <div class="nf-volume-wrap">
+            <button class="nf-btn" id="nfMuteBtn" title="Mute">
+              <svg viewBox="0 0 24 24" width="26" height="26">
+                <path fill="currentColor" d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+              </svg>
+            </button>
+            <input type="range" class="nf-volume" id="nfVolume" min="0" max="1" step="0.05" value="1" />
+          </div>
+        </div>
+
+        <div class="nf-group-right">
+          <button class="nf-btn nf-text-btn" id="nfCcBtn" title="Subtitles">CC</button>
+          <button class="nf-btn nf-text-btn" id="nfQualityBtn" title="Quality">HD</button>
+          <button class="nf-btn" id="nfFullscreenBtn" title="Fullscreen">
+            <svg viewBox="0 0 24 24" width="26" height="26">
+              <path fill="currentColor" d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+            </svg>
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Popups -->
+  <div class="nf-popup" id="nfQualityPopup" hidden>
+    <div class="nf-popup-title">Quality</div>
+    <div class="nf-popup-list" id="nfQualityList"></div>
+  </div>
+
+  <div class="nf-popup" id="nfCcPopup" hidden>
+    <div class="nf-popup-title">Subtitles</div>
+    <div class="nf-popup-list" id="nfCcList"></div>
+  </div>
+</div>
+
+<script src="player.js"></script>
+</body>
+</html>

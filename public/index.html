@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>NetMirror</title>
+<link rel="stylesheet" href="style.css" />
+<link rel="preconnect" href="https://image.tmdb.org" />
+</head>
+<body>
+
+<header class="navbar" id="navbar">
+  <div class="nav-left">
+    <a href="/" class="logo">NET<span>MIRROR</span></a>
+    <nav class="nav-links">
+      <a href="#" class="nav-link active">Home</a>
+      <a href="#" class="nav-link">Movies</a>
+      <a href="#" class="nav-link">TV Shows</a>
+      <a href="#" class="nav-link">New & Popular</a>
+    </nav>
+  </div>
+  <div class="nav-right">
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" width="20" height="20">
+        <path fill="currentColor" d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+      </svg>
+      <input type="text" id="searchInput" placeholder="Search movies, TV shows..." />
+    </div>
+    <div class="avatar">S</div>
+  </div>
+</header>
+
+<section class="hero" id="hero">
+  <div class="hero-bg" id="heroBg"></div>
+  <div class="hero-gradient"></div>
+  <div class="hero-content" id="heroContent"></div>
+</section>
+
+<section class="search-results" id="searchResults" hidden>
+  <h2>Search Results</h2>
+  <div class="grid" id="searchGrid"></div>
+</section>
+
+<main id="mainContent">
+  <div class="row-section" data-row="trending"></div>
+  <div class="row-section" data-row="popular_movies"></div>
+  <div class="row-section" data-row="popular_tv"></div>
+  <div class="row-section" data-row="top_rated"></div>
+  <div class="row-section" data-row="upcoming"></div>
+</main>
+
+<footer class="footer">
+  <p>NetMirror UI · Data from TMDB · Built for learning purposes</p>
+</footer>
+
+<div class="modal" id="modal" hidden>
+  <div class="modal-backdrop" onclick="closeModal()"></div>
+  <div class="modal-body" id="modalBody"></div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
