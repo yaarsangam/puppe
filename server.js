@@ -21,10 +21,10 @@ const TMDB_TOKEN = process.env.TMDB_TOKEN || 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiIxZ
 // ==================================================================
 // WEBSHARE RESIDENTIAL PROXY CONFIG
 // ==================================================================
-const PROXY_HOST = process.env.PROXY_HOST || '';
-const PROXY_PORT = process.env.PROXY_PORT || '80';
-const PROXY_USER = process.env.PROXY_USER || '';
-const PROXY_PASS = process.env.PROXY_PASS || '';
+const PROXY_HOST = process.env.PROXY_HOST || '31.59.20.176';
+const PROXY_PORT = process.env.PROXY_PORT || '6754';
+const PROXY_USER = process.env.PROXY_USER || 'nhbeoqgw';
+const PROXY_PASS = process.env.PROXY_PASS || 'fcjehe5riyuw';
 
 let proxyAgent = null;
 if (PROXY_HOST && PROXY_USER && PROXY_PASS) {
