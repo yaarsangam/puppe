@@ -7,7 +7,7 @@
   },
   "dependencies": {
     "express": "^4.19.2",
-    "puppeteer-core": "^25.10.0",
+    "https-proxy-agent": "^7.0.5",
     "puppeteer": "^25.10.0",
     "puppeteer-extra": "^3.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2"
