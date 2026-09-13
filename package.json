@@ -1,5 +1,5 @@
 {
-  "name": "netmirror",
+  "name": "netmirror-omdb",
   "version": "1.0.0",
   "type": "commonjs",
   "scripts": {
@@ -7,9 +7,6 @@
   },
   "dependencies": {
     "express": "^4.19.2",
-    "puppeteer": "^25.10.0",
-    "puppeteer-extra": "^3.3.6",
-    "puppeteer-extra-plugin-stealth": "^2.11.2",
-    "socks-proxy-agent": "^8.0.4"
+    "puppeteer-core": "^25.10.0"
   }
 }
