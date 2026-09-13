@@ -1,10 +1,6 @@
 const express = require('express');
 const path = require('path');
-const { SocksProxyAgent } = require('socks-proxy-agent');
-
-const puppeteer = require('puppeteer-extra');
-const StealthPlugin = require('puppeteer-extra-plugin-stealth');
-puppeteer.use(StealthPlugin());
+const puppeteer = require('puppeteer-core');
 
 const app = express();
 app.use(express.json());
@@ -19,22 +15,19 @@ const VIDSRC_HOST = process.env.VIDSRC_HOST || 'rozgarlelo.modiplay.xyz';
 const TMDB_TOKEN = process.env.TMDB_TOKEN || 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiIxZGYyMzgyY2RmZGFmNDIzYzFlZDAyMjljYzU0YmY2YiIsIm5iZiI6MTc0NTA1MTI4OC4wMDEsInN1YiI6IjY4MDM1ZTk3YjExM2ZmODcyM2Q5Yzk0NSIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.IZCb8jHZ9alKmQ_KU3be_32ug_QztUqw4Y_KDPt1kYk';
 
 // ==================================================================
-// BYTESFLOWS RESIDENTIAL PROXY CONFIG (SOCKS5)
+// SCRAPELESS CONFIG
 // ==================================================================
-const PROXY_STRING = process.env.BYTESFLOWS_PROXY || 'socks5h://u-tTAeBYLv:MkuWR5ZV@p1.bytesflows.com:8001';
-// Expected format:
-//   socks5h://USERNAME:PASSWORD@residential.byteful.com:8000
+const SCRAPELESS_API_KEY = process.env.SCRAPELESS_API_KEY || '44537bff11da49daa39cf144bca079af7b81225a729';
+const SCRAPELESS_PROXY_COUNTRY = process.env.SCRAPELESS_PROXY_COUNTRY || 'US';
+const SCRAPELESS_SESSION_TTL = process.env.SCRAPELESS_SESSION_TTL || '180';
 
-let proxyAgent = null;
-if (PROXY_STRING) {
-  try {
-    proxyAgent = new SocksProxyAgent(PROXY_STRING);
-    console.log('[proxy] 🌐 BytesFlows SOCKS5 proxy enabled');
-  } catch (e) {
-    console.error('[proxy] ❌ Failed to init SOCKS5 agent:', e.message);
-  }
-} else {
-  console.log('[proxy] ⚠️  No residential proxy configured — using direct connection');
+function buildScrapelessWSEndpoint() {
+  const params = new URLSearchParams({
+    token: SCRAPELESS_API_KEY,
+    session_ttl: SCRAPELESS_SESSION_TTL,
+    proxy_country: SCRAPELESS_PROXY_COUNTRY,
+  });
+  return `wss://browser.scrapeless.com/api/v2/browser?${params.toString()}`;
 }
 
 // Cache successful extractions for 30 min
@@ -142,20 +135,16 @@ app.post('/api/extract', async (req, res) => {
         : `https://${VIDSRC_HOST}/embed/tmdb/movie?id=${imdbId}`;
 
     console.log('[extract] ▶ Loading:', embedUrl);
+    console.log('[extract] 🌐 Scrapeless:', buildScrapelessWSEndpoint().replace(/token=[^&]+/, 'token=***'));
 
-    browser = await puppeteer.launch({
-      headless: HEADLESS ? 'new' : false,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-blink-features=AutomationControlled',
-        '--window-size=1280,720',
-        '--disable-gpu',
-      ],
+    // ==============================================================
+    // CONNECT TO SCRAPELESS CLOUD BROWSER
+    // ==============================================================
+    browser = await puppeteer.connect({
+      browserWSEndpoint: buildScrapelessWSEndpoint(),
       defaultViewport: { width: 1280, height: 720 },
     });
-    console.log('[extract] ✅ Chromium launched');
+    console.log('[extract] ✅ Connected to Scrapeless');
 
     const page = await browser.newPage();
     await page.setUserAgent(UA);
@@ -256,7 +245,6 @@ app.post('/api/extract', async (req, res) => {
       return res.json({ embed: embedUrl, mode: 'iframe' });
     }
 
-    // Build subtitle list
     const subtitles = [...new Set(subtitleUrls)].map((url) => ({
       url,
       lang: extractLangFromUrl(url) || 'en',
@@ -264,10 +252,8 @@ app.post('/api/extract', async (req, res) => {
       referer,
     }));
 
-    // ── Store cookies server-side under a short id ────────────
     const ckId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
     cookieStore.set(ckId, { cookies: allCookies, ts: Date.now() });
-    // Cleanup expired
     for (const [k, v] of cookieStore) {
       if (Date.now() - v.ts > COOKIE_TTL) cookieStore.delete(k);
     }
@@ -330,7 +316,7 @@ async function tryClickPlayer(page) {
 }
 
 // ------------------------------------------------------------------
-// GET /api/proxy  (routes through BytesFlows SOCKS5 when configured)
+// GET /api/proxy
 // ------------------------------------------------------------------
 app.get('/api/proxy', async (req, res) => {
   const target = req.query.url;
@@ -341,15 +327,11 @@ app.get('/api/proxy', async (req, res) => {
   let tgtHost = '';
   try { tgtHost = new URL(target).host; } catch (_) {}
 
-  // ── Referer selection ───────────────────────────────────────
-  // For URLs on the source host (modiplay etc.), use the source root.
-  // For everything else (CDNs), use the derived referer.
   let effectiveReferer = referer;
   if (tgtHost === VIDSRC_HOST) {
     effectiveReferer = `https://${VIDSRC_HOST}/`;
   }
 
-  // ── Build headers ───────────────────────────────────────────
   const headers = {
     Referer: effectiveReferer,
     'User-Agent': UA,
@@ -357,14 +339,12 @@ app.get('/api/proxy', async (req, res) => {
     'Accept-Language': 'en-US,en;q=0.9',
   };
 
-  // Same-origin Origin only
   try {
     const refOrigin = new URL(effectiveReferer).origin;
     const tgtOrigin = new URL(target).origin;
     if (refOrigin === tgtOrigin) headers.Origin = refOrigin;
   } catch (_) {}
 
-  // ── Attach cookies for the target host ──────────────────────
   if (ckId) {
     const entry = cookieStore.get(ckId);
     if (entry) {
@@ -376,23 +356,11 @@ app.get('/api/proxy', async (req, res) => {
     }
   }
 
-  // ── Decide whether to route through the residential proxy ───
-  // Rule: use the proxy for anything that is NOT the source host itself.
-  // Set FORCE_PROXY=true to route EVERYTHING through the proxy.
-  const FORCE_PROXY = process.env.FORCE_PROXY === 'true';
-  const useProxy = proxyAgent && (FORCE_PROXY || tgtHost !== VIDSRC_HOST);
-
   try {
-    const fetchOpts = { headers };
-    if (useProxy) fetchOpts.agent = proxyAgent;
-
-    const upstream = await fetch(target, fetchOpts);
+    const upstream = await fetch(target, { headers });
 
     if (!upstream.ok) {
-      console.log(
-        '[proxy] Upstream error:', upstream.status, target.slice(0, 120),
-        useProxy ? '(via proxy)' : '(direct)'
-      );
+      console.log('[proxy] Upstream error:', upstream.status, target.slice(0, 120));
       return res.status(upstream.status).send(`Upstream ${upstream.status}`);
     }
 
@@ -426,7 +394,7 @@ app.get('/api/proxy', async (req, res) => {
     );
     res.send(Buffer.from(await upstream.arrayBuffer()));
   } catch (err) {
-    console.error('[proxy] Error:', err.message, useProxy ? '(via proxy)' : '(direct)');
+    console.error('[proxy] Error:', err.message);
     res.status(500).send(err.message);
   }
 });
@@ -439,7 +407,7 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log('  Host      :', VIDSRC_HOST);
   console.log('  Headless  :', HEADLESS);
   console.log('  TMDB token:', TMDB_TOKEN.startsWith('eyJ') ? 'set ✅' : 'MISSING ❌');
-  console.log('  Proxy     :', proxyAgent ? 'BytesFlows SOCKS5 ✅' : 'not configured');
+  console.log('  Scrapeless:', SCRAPELESS_API_KEY ? `set ✅ (proxy: ${SCRAPELESS_PROXY_COUNTRY})` : 'MISSING ❌');
   console.log('======================================================');
   console.log('');
 });
